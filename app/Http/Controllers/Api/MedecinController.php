@@ -181,7 +181,8 @@ class MedecinController extends Controller
             $medecin = Medecin::findOrFail($id);
             
             // Soft delete - marquer comme inactif
-            $medecin->update(['actif' => false]);
+            //$medecin->update(['actif' => false]);
+            $medecin->delete();
 
             return response()->json([
                 'success' => true,
