@@ -5,6 +5,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MedicamentController;
 use App\Http\Controllers\Api\MedecinController;
+use App\Http\Controllers\Api\AuthController;
+
+
+// Routes d'authentification
+Route::prefix('auth')->group(function () {
+    Route::post('login', [AuthController::class, 'login']);
+    
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('logout', [AuthController::class, 'logout']);
+        Route::get('me', [AuthController::class, 'me']);
+    });
+});
 
 
 Route::prefix('medecins')->group(function () {
