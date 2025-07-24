@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MedicamentController;
 use App\Http\Controllers\Api\MedecinController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DashboardController;
 
 
 // Routes d'authentification
@@ -15,6 +16,8 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('me', [AuthController::class, 'me']);
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::get('/check', [AuthController::class, 'check']);
     });
 });
 
@@ -52,6 +55,14 @@ Route::prefix('medecins')->group(function () {
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+// Routes Dashboard
+Route::prefix('dashboard')->group(function () {
+    Route::get('/stats', [DashboardController::class, 'stats']);
+    Route::get('/recent-activity', [DashboardController::class, 'recentActivity']);
+    Route::get('/charts', [DashboardController::class, 'charts']);
+});
+
 
 // Routes pour les médicaments
 Route::prefix('medicaments')->group(function () {
