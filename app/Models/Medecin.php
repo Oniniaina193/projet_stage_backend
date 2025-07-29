@@ -13,56 +13,31 @@ class Medecin extends Model
     protected $table = 'medecins';
 
     protected $fillable = [
-        'nom',
-        'prenom',
-        'specialite',
-        'numero_ordre',
+        'nom_complet',
+        'numero_ordre', // ONM
         'telephone',
-        'email',
-        'adresse',
-        'actif'
+        'adresse'
     ];
 
     protected $casts = [
-        'actif' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
 
     /**
-     * Accessor pour le nom complet
-     */
-    public function getNomCompletAttribute(): string
-    {
-        return "Dr. {$this->nom} {$this->prenom}";
-    }
-
-    /**
-     * Scope pour les médecins actifs
-     */
-    public function scopeActifs(Builder $query): Builder
-    {
-        return $query->where('actif', true);
-    }
-
-    /**
-     * Scope pour rechercher par nom ou prénom
+     * Scope pour rechercher par nom complet
      */
     public function scopeRechercherParNom(Builder $query, string $terme): Builder
     {
-        return $query->where(function ($q) use ($terme) {
-            $q->where('nom', 'ILIKE', "%{$terme}%")
-              ->orWhere('prenom', 'ILIKE', "%{$terme}%")
-              ->orWhere('specialite', 'ILIKE', "%{$terme}%");
-        });
+        return $query->where('nom_complet', 'ILIKE', "%{$terme}%");
     }
 
     /**
-     * Scope pour filtrer par spécialité
+     * Scope pour rechercher par numéro ONM
      */
-    public function scopeParSpecialite(Builder $query, string $specialite): Builder
+    public function scopeParNumeroOrdre(Builder $query, string $numero): Builder
     {
-        return $query->where('specialite', 'ILIKE', "%{$specialite}%");
+        return $query->where('numero_ordre', 'ILIKE', "%{$numero}%");
     }
 
     /**
@@ -74,19 +49,15 @@ class Medecin extends Model
     }
 
     /**
-     * Validation des règles
+     * Validation des règles simplifiées
      */
     public static function validationRules($id = null): array
     {
         return [
-            'nom' => 'required|string|max:100',
-            'prenom' => 'required|string|max:100',
-            'specialite' => 'required|string|max:150',
+            'nom_complet' => 'required|string|max:200',
             'numero_ordre' => 'required|string|max:50|unique:medecins,numero_ordre' . ($id ? ",$id" : ''),
             'telephone' => 'required|string|max:20',
-            'email' => 'required|email|max:150|unique:medecins,email' . ($id ? ",$id" : ''),
-            'adresse' => 'required|string',
-            'actif' => 'boolean'
+            'adresse' => 'required|string|max:500'
         ];
     }
 
@@ -96,22 +67,15 @@ class Medecin extends Model
     public static function validationMessages(): array
     {
         return [
-            'nom.required' => 'Le nom est obligatoire',
-            'nom.max' => 'Le nom ne peut pas dépasser 100 caractères',
-            'prenom.required' => 'Le prénom est obligatoire',
-            'prenom.max' => 'Le prénom ne peut pas dépasser 100 caractères',
-            'specialite.required' => 'La spécialité est obligatoire',
-            'specialite.max' => 'La spécialité ne peut pas dépasser 150 caractères',
-            'numero_ordre.required' => 'Le numéro d\'ordre est obligatoire',
-            'numero_ordre.unique' => 'Ce numéro d\'ordre existe déjà',
-            'numero_ordre.max' => 'Le numéro d\'ordre ne peut pas dépasser 50 caractères',
+            'nom_complet.required' => 'Le nom complet est obligatoire',
+            'nom_complet.max' => 'Le nom complet ne peut pas dépasser 200 caractères',
+            'numero_ordre.required' => 'Le numéro ONM est obligatoire',
+            'numero_ordre.unique' => 'Ce numéro ONM existe déjà',
+            'numero_ordre.max' => 'Le numéro ONM ne peut pas dépasser 50 caractères',
             'telephone.required' => 'Le téléphone est obligatoire',
             'telephone.max' => 'Le téléphone ne peut pas dépasser 20 caractères',
-            'email.required' => 'L\'email est obligatoire',
-            'email.email' => 'L\'email doit être valide',
-            'email.unique' => 'Cet email existe déjà',
-            'email.max' => 'L\'email ne peut pas dépasser 150 caractères',
-            'adresse.required' => 'L\'adresse est obligatoire'
+            'adresse.required' => 'L\'adresse est obligatoire',
+            'adresse.max' => 'L\'adresse ne peut pas dépasser 500 caractères'
         ];
     }
 }

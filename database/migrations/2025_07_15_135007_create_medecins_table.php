@@ -13,19 +13,14 @@ return new class extends Migration
     {
         Schema::create('medecins', function (Blueprint $table) {
             $table->id();
-            $table->string('nom', 100);
-            $table->string('prenom', 100);
-            $table->string('specialite', 150);
+            $table->string('nom_complet', 200);
+            $table->text('adresse');
             $table->string('numero_ordre', 50)->unique();
             $table->string('telephone', 20);
-            $table->string('email', 150)->unique();
-            $table->text('adresse');
-            $table->boolean('actif')->default(true);
             $table->timestamps();
             
             // Index pour optimiser les recherches
-            $table->index(['nom', 'prenom']);
-            $table->index('specialite');
+            $table->index('nom_complet');
             $table->index('numero_ordre');
         });
     }
