@@ -23,9 +23,9 @@ class MedicamentController extends Controller
                 $query->searchByName($request->search);
             }
 
-            // recherche par statut
-            if ($request->has('status') && $request->status) {
-                $query->byStatus($request->status);
+            // recherche par famille
+            if ($request->has('famille') && $request->famille) {
+                $query->byFamille($request->famille);
             }
 
             // Filtrage par stock faible
@@ -209,8 +209,7 @@ class MedicamentController extends Controller
         try {
             $stats = [
                 'total_medicaments' => Medicament::count(),
-                'sans_ordonnance' => Medicament::byStatus('sans')->count(),
-                'avec_ordonnance' => Medicament::byStatus('avec')->count(),
+                'par_famille' => Medicament::getStatsByFamille(),
                 'stock_faible' => Medicament::lowStock(10)->count(),
                 'valeur_totale_stock' => Medicament::selectRaw('SUM(prix * stock) as total')->value('total') ?? 0
             ];
@@ -225,6 +224,29 @@ class MedicamentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la récupération des statistiques',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir les suggestions de familles
+     */
+    public function getFamillesSuggestions(): JsonResponse
+    {
+        try {
+            $familles = Medicament::getFamillesSuggestions();
+
+            return response()->json([
+                'success' => true,
+                'data' => $familles,
+                'message' => 'Suggestions de familles récupérées avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des suggestions',
                 'error' => $e->getMessage()
             ], 500);
         }

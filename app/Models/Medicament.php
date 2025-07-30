@@ -19,7 +19,7 @@ class Medicament extends Model
         'nom',
         'prix',
         'stock',
-        'status'
+        'famille'
     ];
 
     /**
@@ -28,7 +28,7 @@ class Medicament extends Model
     protected $casts = [
         'prix' => 'decimal:2',
         'stock' => 'integer',
-        'status' => 'string'
+        'famille' => 'string'
     ];
 
     /**
@@ -40,16 +40,16 @@ class Medicament extends Model
             'nom' => 'required|string|max:255',
             'prix' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
-            'status' => 'required|in:avec,sans'
+            'famille' => 'nullable|string|max:100'
         ];
     }
 
     /**
-     * Scope pour filtrer par statut
+     * Scope pour filtrer par famille
      */
-    public function scopeByStatus($query, $status)
+    public function scopeByFamille($query, $famille)
     {
-        return $query->where('status', $status);
+        return $query->where('famille', 'ILIKE', '%' . $famille . '%');
     }
 
     /**
@@ -66,5 +66,31 @@ class Medicament extends Model
     public function scopeLowStock($query, $threshold = 10)
     {
         return $query->where('stock', '<=', $threshold);
+    }
+
+    /**
+     * Obtenir toutes les familles distinctes pour les suggestions
+     */
+    public static function getFamillesSuggestions()
+    {
+        return self::whereNotNull('famille')
+                   ->where('famille', '!=', '')
+                   ->distinct()
+                   ->pluck('famille')
+                   ->sort()
+                   ->values();
+    }
+
+    /**
+     * Statistiques par famille
+     */
+    public static function getStatsByFamille()
+    {
+        return self::selectRaw('famille, COUNT(*) as count, SUM(stock) as total_stock')
+                   ->whereNotNull('famille')
+                   ->where('famille', '!=', '')
+                   ->groupBy('famille')
+                   ->orderBy('count', 'desc')
+                   ->get();
     }
 }

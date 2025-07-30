@@ -6,138 +6,213 @@ use App\Http\Controllers\Controller;
 use App\Models\Medicament;
 use App\Models\Medecin;
 use App\Models\Ordonnance;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
     /**
-     * Récupérer toutes les statistiques du dashboard en une seule requête
+     * Récupère toutes les données du dashboard en une seule requête optimisée
      */
-    public function stats(): JsonResponse
+    public function getDashboardData()
     {
         try {
-            // Cache les stats pendant 5 minutes
-            $stats = Cache::remember('dashboard_stats', 300, function () {
-                return DB::select("
-                    SELECT 
-                        (SELECT COUNT(*) FROM medicaments) as total_medicaments,
-                        (SELECT COUNT(*) FROM medicaments WHERE status = 'sans') as sans_ordonnance,
-                        (SELECT COUNT(*) FROM medicaments WHERE status = 'avec') as avec_ordonnance,
-                        (SELECT COUNT(*) FROM medicaments WHERE stock < 10) as stock_faible,
-                        (SELECT COUNT(*) FROM ordonnances) as total_ordonnances,
-                        (SELECT COUNT(*) FROM ordonnances WHERE DATE(created_at) = CURRENT_DATE) as ordonnances_jour,
-                        (SELECT COUNT(*) FROM medecins) as total_medecins,
-                        (SELECT COUNT(*) FROM medecins WHERE active = true) as medecins_actifs,
-                        (SELECT COALESCE(SUM(prix * stock), 0) FROM medicaments) as valeur_stock_total
-                ")[0];
+            // Clé de cache unique pour le dashboard
+            $cacheKey = 'dashboard_data_' . auth()->id();
+            $cacheDuration = 300; // 5 minutes
+            
+            $data = Cache::remember($cacheKey, $cacheDuration, function () {
+                return $this->buildDashboardData();
             });
-
+            
             return response()->json([
                 'success' => true,
-                'data' => $stats,
-                'message' => 'Statistiques du dashboard récupérées avec succès'
+                'data' => $data,
+                'cached_at' => now(),
+                'message' => 'Données du dashboard récupérées avec succès'
             ]);
-
+            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des statistiques',
-                'error' => $e->getMessage()
+                'message' => 'Erreur lors de la récupération des données : ' . $e->getMessage()
             ], 500);
         }
     }
-
+    
     /**
-     * Récupérer les activités récentes (ordonnances, nouveaux médicaments, etc.)
+     * Construction optimisée des données dashboard
      */
-    public function recentActivity(): JsonResponse
+    private function buildDashboardData()
+    {
+        // Requêtes parallèles optimisées avec seulement les champs nécessaires
+        $medicaments = Medicament::select('id', 'nom', 'prix', 'stock', 'famille', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        $medecins = Medecin::select('id', 'nom_complet', 'specialite', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        $ordonnances = Ordonnance::select('id', 'medecin_id', 'client_nom', 'total', 'statut', 'created_at')
+            ->with(['medecin:id,nom_complet']) // Eager loading optimisé
+            ->orderBy('created_at', 'desc')
+            ->limit(100) // Limiter pour les performances
+            ->get();
+        
+        // Calculs optimisés des statistiques
+        $stats = $this->calculateDashboardStats($medicaments, $medecins, $ordonnances);
+        
+        // Données pour les graphiques (limité aux plus récents)
+        $recentData = $this->getRecentData($medicaments, $ordonnances);
+        
+        return [
+            'stats' => $stats,
+            'medicaments' => $medicaments->take(50), // Limiter l'affichage initial
+            'medecins' => $medecins->take(50),
+            'ordonnances' => $ordonnances->take(50),
+            'recent_data' => $recentData,
+            'familles_stats' => $this->getFamillesStats($medicaments)
+        ];
+    }
+    
+    /**
+     * Calcul des statistiques principales
+     */
+    private function calculateDashboardStats($medicaments, $medecins, $ordonnances)
+    {
+        // Calculs optimisés avec collections Laravel
+        $stockFaible = $medicaments->where('stock', '<', 10)->count();
+        $valeursStock = $medicaments->sum(function($med) {
+            return $med->prix * $med->stock;
+        });
+        
+        $famillesCount = $medicaments->pluck('famille')
+            ->filter()
+            ->unique()
+            ->count();
+            
+        return [
+            'total_medicaments' => $medicaments->count(),
+            'total_medecins' => $medecins->count(),
+            'total_ordonnances' => $ordonnances->count(),
+            'stock_faible' => $stockFaible,
+            'familles_count' => $famillesCount,
+            'valeur_stock_total' => round($valeursStock, 2),
+            'ordonnances_du_jour' => $ordonnances->whereDate('created_at', today())->count(),
+            'chiffre_affaires_mois' => $ordonnances
+                ->whereMonth('created_at', now()->month)
+                ->sum('total')
+        ];
+    }
+    
+    /**
+     * Données récentes pour les graphiques
+     */
+    private function getRecentData($medicaments, $ordonnances)
+    {
+        return [
+            'medicaments_recents' => $medicaments->take(10),
+            'ordonnances_recentes' => $ordonnances->take(10),
+            'evolution_stock' => $this->getStockEvolution($medicaments),
+            'top_medicaments' => $medicaments->sortByDesc('stock')->take(5)
+        ];
+    }
+    
+    /**
+     * Statistiques par famille
+     */
+    private function getFamillesStats($medicaments)
+    {
+        return $medicaments->groupBy('famille')
+            ->map(function($items, $famille) {
+                return [
+                    'famille' => $famille ?: 'Non définie',
+                    'count' => $items->count(),
+                    'valeur_totale' => $items->sum(function($med) {
+                        return $med->prix * $med->stock;
+                    })
+                ];
+            })
+            ->sortByDesc('count')
+            ->values()
+            ->take(10); // Top 10 familles
+    }
+    
+    /**
+     * Évolution du stock (simulation)
+     */
+    private function getStockEvolution($medicaments)
+    {
+        return $medicaments->where('stock', '>', 0)
+            ->groupBy(function($med) {
+                return $med->created_at->format('Y-m-d');
+            })
+            ->map(function($items, $date) {
+                return [
+                    'date' => $date,
+                    'total_stock' => $items->sum('stock')
+                ];
+            })
+            ->sortBy('date')
+            ->values()
+            ->take(30); // 30 derniers jours
+    }
+    
+    /**
+     * Méthode pour rafraîchir le cache du dashboard
+     */
+    public function refreshDashboard()
     {
         try {
-            $activities = Cache::remember('dashboard_recent_activity', 600, function () {
-                return [
-                    'recent_ordonnances' => Ordonnance::with(['medecin:id_medecin,nom,prenom'])
-                        ->select('id_ordonnance', 'medecin_id', 'created_at')
-                        ->latest()
-                        ->limit(5)
-                        ->get(),
-                    
-                    'new_medicaments' => Medicament::select('id_medicament', 'nom', 'created_at')
-                        ->latest()
-                        ->limit(5)
-                        ->get(),
-                        
-                    'low_stock_alerts' => Medicament::select('id_medicament', 'nom', 'stock')
-                        ->where('stock', '<', 10)
-                        ->orderBy('stock', 'asc')
-                        ->limit(5)
-                        ->get()
-                ];
-            });
-
+            $cacheKey = 'dashboard_data_' . auth()->id();
+            Cache::forget($cacheKey);
+            
+            // Regénérer les données
+            $data = $this->buildDashboardData();
+            Cache::put($cacheKey, $data, 300);
+            
             return response()->json([
                 'success' => true,
-                'data' => $activities,
-                'message' => 'Activités récentes récupérées avec succès'
+                'data' => $data,
+                'message' => 'Dashboard rafraîchi avec succès'
             ]);
-
+            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des activités',
-                'error' => $e->getMessage()
+                'message' => 'Erreur lors du rafraîchissement : ' . $e->getMessage()
             ], 500);
         }
     }
-
+    
     /**
-     * Données pour les graphiques du dashboard
+     * Statistiques légères pour le header/sidebar
      */
-    public function charts(): JsonResponse
+    public function getQuickStats()
     {
         try {
-            $chartData = Cache::remember('dashboard_charts', 1800, function () {
-                // Ordonnances par mois (6 derniers mois)
-                $ordonnancesParMois = DB::select("
-                    SELECT 
-                        DATE_TRUNC('month', created_at) as mois,
-                        COUNT(*) as total
-                    FROM ordonnances 
-                    WHERE created_at >= NOW() - INTERVAL '6 months'
-                    GROUP BY DATE_TRUNC('month', created_at)
-                    ORDER BY mois
-                ");
-
-                // Top 5 médicaments les plus prescrits
-                $topMedicaments = DB::select("
-                    SELECT 
-                        m.nom,
-                        COUNT(om.medicament_id) as prescriptions
-                    FROM medicaments m
-                    JOIN ordonnance_medicaments om ON m.id_medicament = om.medicament_id
-                    GROUP BY m.id_medicament, m.nom
-                    ORDER BY prescriptions DESC
-                    LIMIT 5
-                ");
-
+            $cacheKey = 'quick_stats_' . auth()->id();
+            
+            $stats = Cache::remember($cacheKey, 60, function () { // 1 minute de cache
                 return [
-                    'ordonnances_par_mois' => $ordonnancesParMois,
-                    'top_medicaments' => $topMedicaments
+                    'medicaments_count' => Medicament::count(),
+                    'medecins_count' => Medecin::count(),
+                    'ordonnances_count' => Ordonnance::count(),
+                    'stock_alerts' => Medicament::where('stock', '<', 10)->count()
                 ];
             });
-
+            
             return response()->json([
                 'success' => true,
-                'data' => $chartData,
-                'message' => 'Données des graphiques récupérées avec succès'
+                'data' => $stats
             ]);
-
+            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des graphiques',
-                'error' => $e->getMessage()
+                'message' => 'Erreur : ' . $e->getMessage()
             ], 500);
         }
     }

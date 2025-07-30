@@ -61,6 +61,11 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/charts', [DashboardController::class, 'charts']);
 });
 
+// NOUVELLE ROUTE pour les suggestions de familles
+Route::get('medicaments/familles-suggestions', [MedicamentController::class, 'getFamillesSuggestions']);
+
+// Si vous voulez aussi des statistiques par famille
+Route::get('medicaments/stats-famille', [MedicamentController::class, 'getStatsByFamille']);
 
 // Routes pour les médicaments
 Route::prefix('medicaments')->group(function () {

@@ -16,11 +16,11 @@ return new class extends Migration
             $table->string('nom', 255);
             $table->decimal('prix', 10, 2);
             $table->integer('stock');
-            $table->enum('status', ['avec', 'sans'])->default('sans');
+            $table->string('famille', 100)->nullable();
             $table->timestamps();
-            
+                         
             $table->index('nom');
-            $table->index('status');
+            $table->index('famille'); 
         });
     }
 
